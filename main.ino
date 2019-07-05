@@ -1,7 +1,6 @@
 #include <Wire.h>   //for I2C LCD
 #include <EEPROM.h>
 #include <TinyGPS++.h>
-#include <GSM.h>
 #include <SoftwareSerial.h>   //AT commands leaving through software 
 
 #define TEN_SECONDS 10000
@@ -31,18 +30,16 @@ byte threshold_lower;
 unsigned int threshold;   //threshold value in percentage
 unsigned long time_now = millis();
 
-void sendSMS(void);
+int sendSMS(void);
 void beep(unsigned int duration);
 void buttonPressCheck(void);
 void getGasConc(void);
 bool getGPSdata(void);
 void alert(void);
-int checkResponse(const char *response, unsigned long timeout);
-int sendCmdAndWaitForResponse(const char *cmd, const char *a_part_of_expected_response, unsigned long timeout, unsigned char trials);
+int sendCmdAndWait(const char* cmd, const char* resp);
 
 SoftwareSerial softUART(9,10);   //for a7 module
 TinyGPSPlus gps;
-GSM_SMS sms;
 
 void setup()
 {
@@ -143,7 +140,69 @@ void beep(unsigned int duration_in_milliseconds)
   digitalWrite(BUZZER, LOW);
 }
 
-void sendSMS()
+int sendSMS()
 {
-  sprintf(DATA_out, "WARNING: lat=%s,lng=%s",lattitude.c_str(),longitude.c_str());
+  if(sendCmdAndWait("AT\n","OK"))
+  {
+    if(sendCmdAndWait("AT+CMGF=1\n","OK"))
+    {
+      emptyBuffer(DATA_out);
+      sprintf(DATA_out, "AT+CMGS=%s", telephone); 
+      if(sendCmdAndWait(DATA_out,">"))
+      {
+       sprintf(DATA_out, "WARNING: lat=%s,lng=%s",lattitude.c_str(),longitude.c_str());
+       softUART.write(DATA_out);
+       sendCmdAndWait(char(26), "CMGS"); 
+      }
+      else
+      {
+        return 0;
+      }
+    }
+    else
+    {
+      return 0;
+    }
+  }
+  else
+  {
+    return 0;
+  }
+}
+  
+int sendCmdAndWait(const char* cmd, const char* resp)
+{
+  /*
+   * AT
+   * AT+CMGF=1
+   * AT+CMGS="telephone"
+   * listen for ">" 
+   * type text then (char)26
+   * listen for "cmgs"
+   */
+   softUART.write(cmd);
+   while(softUART.available())
+   {
+    int len = strlen(resp);
+    int i = 0;
+    char c = softUART.read();
+    i = (c == resp[i]) ? i++ : 0;
+    if(i == len)
+    {
+      return 1;
+    }
+    else
+    {
+      return 0;
+    }
+   }
+}
+
+void emptyBuffer(char* arg)
+{
+  unsigned int i;
+  for (i=0;i<strlen(arg);i++)
+  {
+    arg[i] = '\0';
+  }
 }
