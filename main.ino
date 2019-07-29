@@ -61,6 +61,7 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 
 
 const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
+const int VERIFY_SAVED_PARA = 256;
 const int GPSBAUD = 9600;
 
 char DATA_in[100];   //use for anything
@@ -77,13 +78,14 @@ int BUTTON_THRESH_DOWN = 3;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
 
-unsigned int THRESHOLD = 2100;  //ppm
+unsigned int THRESHOLD;
 
 int sendSMS(void);
 void beep(unsigned int duration);
 void buttonPressCheck(void);
 bool getGPSdata(void);
 void alert(void);
+void one_time_burn(void);
 void calibrateSensor(void);
 void showReadings(void);
 //int sendCmdAndWait(String cmd, String resp);
@@ -111,9 +113,9 @@ void setup()
 
   digitalWrite(LED_GREEN_OKAY, LOW);
   digitalWrite(LED_RED_ALARM, HIGH);    //turn on red led
-  beep(500);
-  
-  EEPROM.get(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);   //retrieve saved eeprom address
+  beep(100);
+
+  one_time_burn();
 
   Serial.begin(9600);
   gps_uart.begin(9600);
@@ -128,30 +130,48 @@ void setup()
   
   digitalWrite(LED_RED_ALARM, LOW);
   digitalWrite(LED_GREEN_OKAY, HIGH);
-  beep(500);
+  beep(100);
   lcd.clear();
 }
 
 
 void loop()
 {
-  showReadings();
   unsigned long time_now = millis();
-  buttonPressCheck();
-  if(millis() - time_now > 10000)   //data every 30s
+  while(millis() - time_now <= 10000)
   {
-    lcd.clear();
-    lcd.setCursor(0, 0); //column, row
-    lcd.print(F("Getting "));
-    lcd.setCursor(0, 1);
-    lcd.print(F("GPS data..."));
-    getGPSdata();
+    showReadings();
+    buttonPressCheck();
+    if ( (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG) > THRESHOLD) || (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4) > THRESHOLD) )
+    {
+      alert();
+    }
   }
-  if ( (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG) > THRESHOLD) || (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4) > THRESHOLD) )
+  lcd.clear();
+  lcd.setCursor(0, 0); //column, row
+  lcd.print(F("Getting "));
+  lcd.setCursor(0, 1);
+  lcd.print(F("GPS data..."));
+  getGPSdata();
+  lcd.clear();
+}
+
+
+void one_time_burn(void)
+{
+  unsigned int once;
+  EEPROM.get(VERIFY_SAVED_PARA, once);   //retrieve saved eeprom address
+  if (once != (unsigned int)2468)
   {
-    alert();
+    EEPROM.put(VERIFY_SAVED_PARA, (unsigned int)2468);
+    EEPROM.put(MEMORY_ADDRESS_THRESHOLD, 2100);
+  }
+  else
+  { 
+    EEPROM.get(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);   //retrieve saved eeprom address
   }
 }
+
 
 void showReadings(void)
 {
@@ -173,34 +193,6 @@ void showReadings(void)
 
 void buttonPressCheck(void)
 {
-  if(digitalRead(BUTTON_THRESH_UP) == LOW)
-  {
-    beep(500);
-    EEPROM.update(MEMORY_ADDRESS_THRESHOLD, THRESHOLD++);
-    lcd.clear();
-    lcd.setCursor(0, 0);    //column, row
-    lcd.print(F("Threshold: "));
-    lcd.setCursor(0, 1);
-    lcd.print(THRESHOLD);
-    lcd.setCursor(5, 1);
-    lcd.print(F("ppm"));
-    delay(500);
-    lcd.clear();
-  }
-  if(digitalRead(BUTTON_THRESH_DOWN) == LOW)
-  {
-    beep(500);
-    EEPROM.update(MEMORY_ADDRESS_THRESHOLD, THRESHOLD--);
-    lcd.clear();
-    lcd.setCursor(0, 0); //column, row
-    lcd.print(F("Threshold: "));
-    lcd.setCursor(0, 1);
-    lcd.print(THRESHOLD);
-    lcd.setCursor(5, 1);
-    lcd.print(F("ppm"));
-    delay(500);
-    lcd.clear();
-  }
   if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) )
   {
     lcd.clear();
@@ -210,7 +202,37 @@ void buttonPressCheck(void)
     lcd.print(THRESHOLD);
     lcd.setCursor(5, 1);
     lcd.print(F("ppm"));
-    delay(500);
+    delay(1000);
+    lcd.clear();
+  }
+  if(digitalRead(BUTTON_THRESH_UP) == LOW)
+  {
+    beep(100);
+    THRESHOLD = THRESHOLD + 100;
+    EEPROM.put(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);
+    lcd.clear();
+    lcd.setCursor(0, 0);    //column, row
+    lcd.print(F("Threshold ++ "));
+    lcd.setCursor(0, 1);
+    lcd.print(THRESHOLD);
+    lcd.setCursor(5, 1);
+    lcd.print(F("ppm"));
+    delay(1000);
+    lcd.clear();
+  }
+  if(digitalRead(BUTTON_THRESH_DOWN) == LOW)
+  {
+    beep(100);
+    THRESHOLD = THRESHOLD - 100;
+    EEPROM.put(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);
+    lcd.clear();
+    lcd.setCursor(0, 0); //column, row
+    lcd.print(F("Threshold -- "));
+    lcd.setCursor(0, 1);
+    lcd.print(THRESHOLD);
+    lcd.setCursor(5, 1);
+    lcd.print(F("ppm"));
+    delay(1000);
     lcd.clear();
   }
 }
@@ -218,7 +240,8 @@ void buttonPressCheck(void)
 
 bool getGPSdata(void)
 {
-  while(gps_uart.available() > 0)
+  unsigned long time_now = millis();
+  while( (gps_uart.available() > 0) || (millis() - time_now <= 10000) )
   {
     if(gps.encode(gps_uart.read()))
     {
@@ -230,6 +253,13 @@ bool getGPSdata(void)
     }
     else
     {
+      lcd.clear();
+      lcd.home();
+      lcd.print(F("GPS"));
+      lcd.setCursor(0, 1);
+      lcd.print(F("unavailable..."));
+      delay(1000);
+      lcd.clear();
       return false;
     }
   }
