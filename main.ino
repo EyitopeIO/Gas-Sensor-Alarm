@@ -69,15 +69,15 @@ String lattitude;
 
 String telephone = "\"+2348034344308\"";
 
-int BUZZER = D4;   
-int LED_RED_ALARM = D5; 
-int LED_GREEN_OKAY = D6; 
-int BUTTON_THRESH_UP = D2; 
-int BUTTON_THRESH_DOWN = D3;
+int BUZZER = 4;   
+int LED_RED_ALARM = 5; 
+int LED_GREEN_OKAY = 6; 
+int BUTTON_THRESH_UP = 2; 
+int BUTTON_THRESH_DOWN = 3;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
 
-//unsigned int THRESHOLD = 2100;  //ppm
+unsigned int THRESHOLD = 2100;  //ppm
 
 int sendSMS(void);
 void beep(unsigned int duration);
@@ -85,9 +85,9 @@ void buttonPressCheck(void);
 bool getGPSdata(void);
 void alert(void);
 void calibrateSensor(void);
-void showReadings(void)
+void showReadings(void);
 //int sendCmdAndWait(String cmd, String resp);
-byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
+byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial);
 
 SoftwareSerial gsm_uart(9, 10); //Tx, Rx
 SoftwareSerial gps_uart(7,8);    //Tx, Rx
@@ -100,7 +100,7 @@ void setup()
   lcd.home();
   lcd.setCursor(0,0);
   lcd.setBacklight(HIGH);
-  lcd.print(F("Setting up...");
+  lcd.print(F("Setting up..."));
 
   pinMode(MQ_PIN, INPUT);
   pinMode(BUZZER, OUTPUT);
@@ -111,24 +111,25 @@ void setup()
 
   digitalWrite(LED_GREEN_OKAY, LOW);
   digitalWrite(LED_RED_ALARM, HIGH);    //turn on red led
-  beep(700);
+  beep(500);
   
   EEPROM.get(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);   //retrieve saved eeprom address
 
   Serial.begin(9600);
-  while(!Serial);
-  gps_uart.begin(GPSBAUD);
-  while(!gps_uart);
-  gsm_uart.begin(GPSBAUD);
-  while(!gsm_uart);
+  gps_uart.begin(9600);
+  gsm_uart.begin(9600);
 
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print(F("Sensor loading...");
+  lcd.print(F("Warming"));
+  lcd.setCursor(0,1);
+  lcd.print(F("Sensor..."));
   Ro = MQCalibration(MQ_PIN);
   
   digitalWrite(LED_RED_ALARM, LOW);
   digitalWrite(LED_GREEN_OKAY, HIGH);
+  beep(500);
+  lcd.clear();
 }
 
 
@@ -139,6 +140,11 @@ void loop()
   buttonPressCheck();
   if(millis() - time_now > 10000)   //data every 30s
   {
+    lcd.clear();
+    lcd.setCursor(0, 0); //column, row
+    lcd.print(F("Getting "));
+    lcd.setCursor(0, 1);
+    lcd.print(F("GPS data..."));
     getGPSdata();
   }
   if ( (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG) > THRESHOLD) || (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4) > THRESHOLD) )
@@ -149,8 +155,7 @@ void loop()
 
 void showReadings(void)
 {
-  lcd.clear();
-  lcd.setCursor(0, 0); //column, row
+  lcd.home();
   lcd.print(F("LPG: "));
   lcd.setCursor(5, 0); 
   lcd.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_LPG));
@@ -163,8 +168,6 @@ void showReadings(void)
   lcd.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_CH4));
   lcd.setCursor(10, 1);
   lcd.print(F("ppm"));
-
-  delay(500);
 }
 
 
@@ -182,6 +185,7 @@ void buttonPressCheck(void)
     lcd.setCursor(5, 1);
     lcd.print(F("ppm"));
     delay(500);
+    lcd.clear();
   }
   if(digitalRead(BUTTON_THRESH_DOWN) == LOW)
   {
@@ -195,6 +199,19 @@ void buttonPressCheck(void)
     lcd.setCursor(5, 1);
     lcd.print(F("ppm"));
     delay(500);
+    lcd.clear();
+  }
+  if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) )
+  {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("Threshold: "));
+    lcd.setCursor(0, 1);
+    lcd.print(THRESHOLD);
+    lcd.setCursor(5, 1);
+    lcd.print(F("ppm"));
+    delay(500);
+    lcd.clear();
   }
 }
 
@@ -245,8 +262,8 @@ int sendSMS()
       String Outgoing = "AT+CMGS=" + telephone + '\n';
       if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
       {
-        outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
-        gsm_uart.write(outgoing);
+        Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
+        gsm_uart.print(Outgoing);
         sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE); 
       }
       else
