@@ -241,7 +241,8 @@ void buttonPressCheck(void)
 bool getGPSdata(void)
 {
   unsigned long time_now = millis();
-  while( (gps_uart.available() > 0) || (millis() - time_now <= 10000) )
+  gps_uart.listen();
+  while( (gps_uart.available() > 0) || (millis() - time_now <= 5000) )
   {
     if(gps.encode(gps_uart.read()))
     {
@@ -249,18 +250,19 @@ bool getGPSdata(void)
       {
         lattitude = gps.location.lat();
         longitude = gps.location.lng();
+        break;
       }
-    }
-    else
-    {
-      lcd.clear();
-      lcd.home();
-      lcd.print(F("GPS"));
-      lcd.setCursor(0, 1);
-      lcd.print(F("unavailable..."));
-      delay(1000);
-      lcd.clear();
-      return false;
+      else
+      {
+        lcd.clear();
+        lcd.home();
+        lcd.print(F("GPS"));
+        lcd.setCursor(0, 1);
+        lcd.print(F("unavailable..."));
+        delay(1000);
+        lcd.clear();
+        return false;
+      }
     }
   }
 }
@@ -285,6 +287,7 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
+  gsm_uart.listen();
   if(sendCmdAndWait(F("AT\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
   {
     if(sendCmdAndWait(F("AT+CMGF=1\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
