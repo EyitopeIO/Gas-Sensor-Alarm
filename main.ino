@@ -1,8 +1,7 @@
-#include <Wire.h>   //for I2C LCD
+#include <Wire.h>   
 #include <EEPROM.h>
 #include <TinyGPS++.h>
-#include <SoftwareSerial.h>   //AT commands leaving through software 
-#include <Wire.h>
+#include <SoftwareSerial.h>  
 #include <LiquidCrystal_I2C.h>
 
 #define TEN_SECONDS 10000
@@ -62,7 +61,7 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 
 const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
 const int VERIFY_SAVED_PARA = 256;
-const int GPSBAUD = 9600;
+const int BAUD = 9600;
 
 char DATA_in[100];   //use for anything
 String longitude;
@@ -92,7 +91,7 @@ void showReadings(void);
 byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial);
 
 SoftwareSerial gsm_uart(9, 10); //Tx, Rx
-SoftwareSerial gps_uart(7,8);    //Tx, Rx
+SoftwareSerial gps_uart(8,7);    
 TinyGPSPlus gps;
 LiquidCrystal_I2C lcd(I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, BACKLIGHT_PIN, POSITIVE);
 
@@ -102,7 +101,7 @@ void setup()
   lcd.home();
   lcd.setCursor(0,0);
   lcd.setBacklight(HIGH);
-  lcd.print(F("Setting up..."));
+  lcd.print(F("****************"));
 
   pinMode(MQ_PIN, INPUT);
   pinMode(BUZZER, OUTPUT);
@@ -117,9 +116,9 @@ void setup()
 
   one_time_burn();
 
-  Serial.begin(9600);
-  gps_uart.begin(9600);
-  gsm_uart.begin(9600);
+  Serial.begin(BAUD);
+  gps_uart.begin(BAUD);
+  gsm_uart.begin(BAUD);
 
   lcd.clear();
   lcd.setCursor(0,0);
@@ -287,7 +286,6 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
-  gsm_uart.listen();
   if(sendCmdAndWait(F("AT\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
   {
     if(sendCmdAndWait(F("AT+CMGF=1\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
@@ -315,34 +313,13 @@ int sendSMS()
   }
 }
 
-/*  
-int sendCmdAndWait(String cmd, String resp)
-{
-   gps.write(cmd);
-   unsigned long t_now = millis();
-   int len = resp.length();
-   int i = 0;
-   while ( (millis() - t_now) > 10 )
-   {
-    while(gps.available())
-    {
-      char c = gps.read();
-      i = (c == resp[i]) ? i++ : 0;
-      if(i == len)
-      {
-        return 1;
-      }
-    }
-   }
-   return 0;
-}
-*/
 
 byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
 {
   unsigned long time_now = millis();
   int len = resp.length();
   object.print(cmd);
+  gsm.listen();
   while(trial--)
   { 
     while(millis() - time_now < response_time)
@@ -361,16 +338,6 @@ byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int
     }
   }
   return 0; //fail
-}
-
-
-void emptyBuffer(char* arg)
-{
-  unsigned int i;
-  for (i=0;i<strlen(arg);i++)
-  {
-    arg[i] = '\0';
-  }
 }
 
 
