@@ -63,11 +63,12 @@ const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold val
 const int VERIFY_SAVED_PARA = 256;
 const int BAUD = 9600;
 
-char DATA_in[100];   //use for anything
+String Incoming = "";   //hold incoming serial data
 String longitude;
 String lattitude;
 
-String telephone = "\"+2348034344308\"";
+String telephone_precious = "\"+2348034344308\"";
+String telephone_lecturer = "\"+2348060981990\"";
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
@@ -158,12 +159,16 @@ void loop()
 
 void one_time_burn(void)
 {
+  /*
+   * This is to ensure that the default value is loaded into the system when system starts for the first time
+   * Subsequent threshold values are then saved by the user.
+   */
   unsigned int once;
   EEPROM.get(VERIFY_SAVED_PARA, once);   //retrieve saved eeprom address
-  if (once != (unsigned int)2468)
+  if (once != (unsigned int)222)
   {
-    EEPROM.put(VERIFY_SAVED_PARA, (unsigned int)2468);
-    EEPROM.put(MEMORY_ADDRESS_THRESHOLD, 2100);
+    EEPROM.put(VERIFY_SAVED_PARA, (unsigned int)222);
+    EEPROM.put(MEMORY_ADDRESS_THRESHOLD, 1000);
   }
   else
   { 
@@ -241,7 +246,7 @@ bool getGPSdata(void)
 {
   unsigned long time_now = millis();
   gps_uart.listen();
-  while( (gps_uart.available() > 0) || (millis() - time_now <= 5000) )
+  while( (gps_uart.available() > 0) || (millis() - time_now <= 10000) )
   {
     if(gps.encode(gps_uart.read()))
     {
@@ -290,28 +295,18 @@ int sendSMS()
   {
     if(sendCmdAndWait(F("AT+CMGF=1\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
     {
-      String Outgoing = "AT+CMGS=" + telephone + '\n';
+      String Outgoing = "AT+CMGS=" + telephone_precious + '\n';
       if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
       {
         Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
         gsm_uart.print(Outgoing);
-        sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE); 
-      }
-      else
-      { 
-        return 0;
+        sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE);
+        return 1;
       }
     }
-    else
-    {
-      return 0;
-    }
   }
-  else
-  {
-    return 0;
-  }
-}
+} 
+
 
 
 byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
@@ -319,7 +314,7 @@ byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int
   unsigned long time_now = millis();
   int len = resp.length();
   object.print(cmd);
-  gsm.listen();
+  object.listen();
   while(trial--)
   { 
     while(millis() - time_now < response_time)
@@ -328,16 +323,20 @@ byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int
       {
         int i, index_ = 0;
         char c = object.read();
-        DATA_in[index_++] = c; //keeping our response just in case
-        i = (c == resp[i]) ? i++ : 0;
-        if (i == len)
+        Incoming = Incoming + c; //keeping our response just in case
+        if(Incoming.indexOf(resp) >= 0)   //if resp found in Incoming
         {
-          return 1; //success
+          return 1;
+        }
+        else
+        {
+          Serial.println(Incoming);
+          Incoming = "";
+          return 0;
         }
       }
     }
   }
-  return 0; //fail
 }
 
 
