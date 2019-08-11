@@ -295,13 +295,25 @@ int sendSMS()
   {
     if(sendCmdAndWait(F("AT+CMGF=1\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
     {
+
+      //Initiate text to Precious
       String Outgoing = "AT+CMGS=" + telephone_precious + '\n';
       if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
       {
         Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
         gsm_uart.print(Outgoing);
         sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE);
-        return 1;
+        delay(5000);
+        
+        //Initiate text to Lecturer
+        String Outgoing = "AT+CMGS=" + telephone_lecturer + '\n'; 
+        if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
+        {
+          Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
+          gsm_uart.print(Outgoing);
+          sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE);
+          return 1;
+        }        
       }
     }
   }
