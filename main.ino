@@ -89,7 +89,7 @@ void one_time_burn(void);
 void calibrateSensor(void);
 void showReadings(void);
 //int sendCmdAndWait(String cmd, String resp);
-byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial);
+int sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial);
 
 SoftwareSerial gsm_uart(9, 10); //Tx, Rx
 SoftwareSerial gps_uart(8,7);    
@@ -291,13 +291,13 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
-  if(sendCmdAndWait(F("AT\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
+  if(sendCmdAndWait(F("AT\r\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
   {
-    if(sendCmdAndWait(F("AT+CMGF=1\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
+    if(sendCmdAndWait(F("AT+CMGF=1\r\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
     {
 
       //Initiate text to Precious
-      String Outgoing = "AT+CMGS=" + telephone_precious + '\n';
+      String Outgoing = "AT+CMGS=" + telephone_precious + "\r\n";
       if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
       {
         Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
@@ -306,7 +306,7 @@ int sendSMS()
         delay(5000);
         
         //Initiate text to Lecturer
-        String Outgoing = "AT+CMGS=" + telephone_lecturer + '\n'; 
+        String Outgoing = "AT+CMGS=" + telephone_lecturer + "\r\n"; 
         if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
         {
           Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
@@ -321,7 +321,7 @@ int sendSMS()
 
 
 
-byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
+int sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
 {
   unsigned long time_now = millis();
   int len = resp.length();
@@ -329,23 +329,23 @@ byte sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int
   object.listen();
   while(trial--)
   { 
-    while(millis() - time_now < response_time)
+    while (object.available())
     {
-      while (object.available())
+      char c = object.read();
+      Incoming = Incoming + c; //keeping our response just in case
+      if(Incoming.indexOf(resp) >= 0)   //if resp found in Incoming
       {
-        int i, index_ = 0;
-        char c = object.read();
-        Incoming = Incoming + c; //keeping our response just in case
-        if(Incoming.indexOf(resp) >= 0)   //if resp found in Incoming
-        {
-          return 1;
-        }
-        else
-        {
-          Serial.println(Incoming);
-          Incoming = "";
-          return 0;
-        }
+        Serial.print("Data in: ");
+        Serial.print(Incoming);
+        Serial.println();
+        Incoming = "";
+        return 1;
+      }
+      else
+      {
+        Serial.println(Incoming);
+        Incoming = "";
+        return 0;
       }
     }
   }
