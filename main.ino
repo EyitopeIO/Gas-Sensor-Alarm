@@ -3,6 +3,7 @@
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>  
 #include <LiquidCrystal_I2C.h>
+#include <Sim800L.h>
 
 #define TEN_SECONDS 10000
 #define THREE 3
@@ -56,9 +57,6 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 /******************************************************************************************************************************* */
 
 
-
-
-
 const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
 const int VERIFY_SAVED_PARA = 256;
 const int BAUD = 9600;
@@ -67,8 +65,8 @@ String Incoming = "";   //hold incoming serial data
 String longitude;
 String lattitude;
 
-String telephone_precious = "\"+2348034344308\"";
-String telephone_lecturer = "\"+2348060981990\"";
+char *telephone_precious = "+2348034344308";
+char *telephone_lecturer = "+2348060981990";
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
@@ -86,12 +84,9 @@ void buttonPressCheck(void);
 bool getGPSdata(void);
 void alert(void);
 void one_time_burn(void);
-void calibrateSensor(void);
 void showReadings(void);
-//int sendCmdAndWait(String cmd, String resp);
-int sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial);
 
-SoftwareSerial gsm_uart(9, 10); //Tx, Rx
+Sim800L gsm_uart(9, 10); //Tx, Rx
 SoftwareSerial gps_uart(8,7);    
 TinyGPSPlus gps;
 LiquidCrystal_I2C lcd(I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, BACKLIGHT_PIN, POSITIVE);
@@ -291,64 +286,10 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
-  if(sendCmdAndWait(F("AT\r\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
-  {
-    if(sendCmdAndWait(F("AT+CMGF=1\r\n"),F("OK"), gsm_uart, TEN_SECONDS, THREE))
-    {
-
-      //Initiate text to Precious
-      String Outgoing = "AT+CMGS=" + telephone_precious + "\r\n";
-      if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
-      {
-        Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
-        gsm_uart.print(Outgoing);
-        sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE);
-        delay(5000);
-        
-        //Initiate text to Lecturer
-        String Outgoing = "AT+CMGS=" + telephone_lecturer + "\r\n"; 
-        if (sendCmdAndWait(Outgoing, ">", gsm_uart, TEN_SECONDS, THREE))
-        {
-          Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
-          gsm_uart.print(Outgoing);
-          sendCmdAndWait(char(26), "CMGS", gsm_uart, TEN_SECONDS, THREE);
-          return 1;
-        }        
-      }
-    }
-  }
-} 
-
-
-
-int sendCmdAndWait(String cmd, String resp, SoftwareSerial object, unsigned int response_time, unsigned int trial)
-{
-  unsigned long time_now = millis();
-  int len = resp.length();
-  object.print(cmd);
-  object.listen();
-  while(trial--)
-  { 
-    while (object.available())
-    {
-      char c = object.read();
-      Incoming = Incoming + c; //keeping our response just in case
-      if(Incoming.indexOf(resp) >= 0)   //if resp found in Incoming
-      {
-        Serial.print("Data in: ");
-        Serial.print(Incoming);
-        Serial.println();
-        Incoming = "";
-        return 1;
-      }
-      else
-      {
-        Serial.println(Incoming);
-        Incoming = "";
-        return 0;
-      }
-    }
-  }
+  String Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
+  char *text = Outgoing.c_str();  //Convert C++ string to C char array
+  gsm_uart.sendSms(telephone_precious, text);
+  gsm_uart.sendSms(telephone_lecturer, text);
 }
 
 
