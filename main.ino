@@ -59,7 +59,7 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 
 const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
 const int VERIFY_SAVED_PARA = 256;
-const int BAUD = 9600;
+const int BAUD_DEFAULT = 9600;
 
 String Incoming = "";   //hold incoming serial data
 String longitude;
@@ -71,8 +71,8 @@ char *telephone_lecturer = "+2348060981990";
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
 int LED_GREEN_OKAY = 6; 
-int BUTTON_THRESH_UP = 2; 
-int BUTTON_THRESH_DOWN = 3;
+int BUTTON_THRESH_UP = 11; 
+int BUTTON_THRESH_DOWN = 12;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
 
@@ -86,7 +86,7 @@ void alert(void);
 void one_time_burn(void);
 void showReadings(void);
 
-Sim800L gsm_uart(9, 10); //Tx, Rx
+Sim800L gsm_uart(9, 10); //Rx, Tx
 SoftwareSerial gps_uart(8,7);    
 TinyGPSPlus gps;
 LiquidCrystal_I2C lcd(I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, BACKLIGHT_PIN, POSITIVE);
@@ -112,10 +112,9 @@ void setup()
 
   one_time_burn();
 
-  Serial.begin(BAUD);
-  gps_uart.begin(BAUD);
-  gsm_uart.begin(BAUD);
-
+  Serial.begin(BAUD_DEFAULT);
+  gps_uart.begin(BAUD_DEFAULT);
+  gsm_uart.begin(BAUD_DEFAULT);
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print(F("Warming"));
@@ -125,15 +124,17 @@ void setup()
   
   digitalWrite(LED_RED_ALARM, LOW);
   digitalWrite(LED_GREEN_OKAY, HIGH);
-  beep(100);
+  beep(500);
   lcd.clear();
+
+  getGPSdata();
 }
 
 
 void loop()
 {
   unsigned long time_now = millis();
-  while(millis() - time_now <= 10000)
+  while(millis() - time_now <= 30000)
   {
     showReadings();
     buttonPressCheck();
@@ -142,13 +143,7 @@ void loop()
       alert();
     }
   }
-  lcd.clear();
-  lcd.setCursor(0, 0); //column, row
-  lcd.print(F("Getting "));
-  lcd.setCursor(0, 1);
-  lcd.print(F("GPS data..."));
-  getGPSdata();
-  lcd.clear();
+  getGPSdata(); //loop holds here for 30s
 }
 
 
@@ -192,8 +187,7 @@ void showReadings(void)
 
 void buttonPressCheck(void)
 {
-  if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) )
-  {
+  if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) ) {
     lcd.clear();
     lcd.home();
     lcd.print(F("Threshold: "));
@@ -204,8 +198,7 @@ void buttonPressCheck(void)
     delay(1000);
     lcd.clear();
   }
-  if(digitalRead(BUTTON_THRESH_UP) == LOW)
-  {
+  if(digitalRead(BUTTON_THRESH_UP) == LOW) {
     beep(100);
     THRESHOLD = THRESHOLD + 100;
     EEPROM.put(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);
@@ -218,9 +211,14 @@ void buttonPressCheck(void)
     lcd.print(F("ppm"));
     delay(1000);
     lcd.clear();
+    /*
+    lcd.clear();
+    lcd.setCursor(0, 0);    //column, row
+    lcd.print(F("DEBUG..."));
+    delay(600000);
+    */
   }
-  if(digitalRead(BUTTON_THRESH_DOWN) == LOW)
-  {
+  if(digitalRead(BUTTON_THRESH_DOWN) == LOW) {
     beep(100);
     THRESHOLD = THRESHOLD - 100;
     EEPROM.put(MEMORY_ADDRESS_THRESHOLD, THRESHOLD);
@@ -239,33 +237,60 @@ void buttonPressCheck(void)
 
 bool getGPSdata(void)
 {
+  lcd.clear();
   unsigned long time_now = millis();
   gps_uart.listen();
-  while( (gps_uart.available() > 0) || (millis() - time_now <= 10000) )
-  {
-    if(gps.encode(gps_uart.read()))
-    {
-      if(gps.location.isValid())
-      {
+  lcd.home();
+  lcd.print(F("Waiting for"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("GPS signal... "));
+  delay(1000);
+  while((gps_uart.available() > 0) || (millis() - time_now <= 30000) ) {
+    if(gps.encode(gps_uart.read())) {
+      if(gps.location.isValid()) {
         lattitude = gps.location.lat();
         longitude = gps.location.lng();
-        break;
-      }
-      else
-      {
         lcd.clear();
         lcd.home();
         lcd.print(F("GPS"));
         lcd.setCursor(0, 1);
-        lcd.print(F("unavailable..."));
+        lcd.print(F("updated."));
         delay(1000);
         lcd.clear();
-        return false;
+        lcd.home();
+        lcd.print(F("Lat:"));
+        lcd.print(lattitude);
+        lcd.setCursor(0,1);
+        lcd.print(F("Lng:"));
+        lcd.print(longitude);
+        delay(1000);
+        lcd.clear();
+        if(gps.charsProcessed() < 10){
+          lcd.clear();
+          lcd.home();
+          lcd.print(F("GPS not"));
+          lcd.setCursor(0, 1);
+          lcd.print(F("available."));
+          delay(1000);
+          lcd.clear();
+          break;
+        }
+        return true;
       }
     }
+    /*
+    else if(gps.charsProcessed() < 10){
+    }
+    */
   }
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("GPS search"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("timeout."));
+  delay(1000);
+  lcd.clear();
 }
-
 
 void alert(void)
 {
@@ -286,10 +311,14 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
+  gsm_uart.listen();
   String Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
   char *text = Outgoing.c_str();  //Convert C++ string to C char array
   gsm_uart.sendSms(telephone_precious, text);
   gsm_uart.sendSms(telephone_lecturer, text);
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("SMS sent"));
 }
 
 
