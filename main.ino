@@ -62,15 +62,15 @@ const int VERIFY_SAVED_PARA = 256;
 const int BAUD_DEFAULT = 9600;
 
 String Incoming = "";   //hold incoming serial data
-String longitude;
-String lattitude;
+String longitude = "0.0000";
+String lattitude = "0.00005";
 
 char *telephone_precious = "+2348034344308";
 char *telephone_lecturer = "+2348060981990";
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
-int LED_GREEN_OKAY = 6; 
+int LED_GREEN_OKAY = 6;  //originally pin 6 
 int BUTTON_THRESH_UP = 11; 
 int BUTTON_THRESH_DOWN = 12;
 int threshold_upper;   //stored threshold in memory
@@ -116,7 +116,7 @@ void setup()
   gps_uart.begin(BAUD_DEFAULT);
   gsm_uart.begin(BAUD_DEFAULT);
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0,0);   //same as lcd.home( )
   lcd.print(F("Warming"));
   lcd.setCursor(0,1);
   lcd.print(F("Sensor..."));
@@ -186,7 +186,7 @@ void showReadings(void)
 
 
 void buttonPressCheck(void)
-{
+{/*
   if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) ) {
     lcd.clear();
     lcd.home();
@@ -211,12 +211,6 @@ void buttonPressCheck(void)
     lcd.print(F("ppm"));
     delay(1000);
     lcd.clear();
-    /*
-    lcd.clear();
-    lcd.setCursor(0, 0);    //column, row
-    lcd.print(F("DEBUG..."));
-    delay(600000);
-    */
   }
   if(digitalRead(BUTTON_THRESH_DOWN) == LOW) {
     beep(100);
@@ -232,6 +226,7 @@ void buttonPressCheck(void)
     delay(1000);
     lcd.clear();
   }
+  */
 }
 
 
