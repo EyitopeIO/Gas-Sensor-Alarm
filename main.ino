@@ -1,4 +1,4 @@
-#include <Wire.h>   
+//#include <Wire.h>   
 #include <EEPROM.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>  
@@ -9,10 +9,6 @@
 #define THREE 3
 #define I2C_ADDRESS 0x27    //Run a I2C scanner code to find this
 #define BACKLIGHT_PIN 3     //Library examples declares this as 13. Beware.
-
-
-
-
 
 /*******************Demo for MQ-6 Gas Sensor Module V1.3*****************************
 Contact:  support[at]sandboxelectronics.com
@@ -27,7 +23,8 @@ Note:    This piece of source code is supposed to be used as a demostration ONLY
 
 /************************Hardware Related Macros************************************/
 #define         MQ_PIN                       (7)     //define which analog input channel you are going to use
-#define         RL_VALUE                     (1) //prev=20   //define the load resistance on the board, in kilo ohms
+#define         RL_VALUE                     (10) //define the load resistance on the board, in kilo ohms
+//#define         RL_VALUE                     (20) //define the load resistance on the board, in kilo ohms
 #define         RO_CLEAN_AIR_FACTOR          (10)    //RO_CLEAR_AIR_FACTOR=(Sensor resistance in clean air)/RO,
                                                      //which is derived from the chart in datasheet
 
@@ -59,11 +56,10 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 
 const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
 const int VERIFY_SAVED_PARA = 256;
-const int BAUD_DEFAULT = 9600;
 
 String Incoming = "";   //hold incoming serial data
 String longitude = "0.0000";
-String lattitude = "0.00005";
+String lattitude = "0.0000";
 
 char *telephone_precious = "+2348034344308";
 char *telephone_lecturer = "+2348060981990";
@@ -86,8 +82,12 @@ void alert(void);
 void one_time_burn(void);
 void showReadings(void);
 
-Sim800L gsm_uart(9, 10); //Rx, Tx
-SoftwareSerial gps_uart(8,7);    
+static const int gps_RXPin = 8, gps_TXPin = 7;
+static const int gsm_RXPin = 10, gsm_TXPin = 9;
+static const uint32_t BAUD_DEFAULT = 9600;
+
+Sim800L gsm_uart(gsm_RXPin, gsm_TXPin);   //Rx, Tx
+SoftwareSerial gps_uart(gps_RXPin, gps_TXPin);    
 TinyGPSPlus gps;
 LiquidCrystal_I2C lcd(I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, BACKLIGHT_PIN, POSITIVE);
 
@@ -97,7 +97,6 @@ void setup()
   lcd.home();
   lcd.setCursor(0,0);
   lcd.setBacklight(HIGH);
-  lcd.print(F("****************"));
 
   pinMode(MQ_PIN, INPUT);
   pinMode(BUZZER, OUTPUT);
@@ -114,7 +113,7 @@ void setup()
 
   Serial.begin(BAUD_DEFAULT);
   gps_uart.begin(BAUD_DEFAULT);
-  gsm_uart.begin(BAUD_DEFAULT);
+  gsm_uart.begin(2400);
   lcd.clear();
   lcd.setCursor(0,0);   //same as lcd.home( )
   lcd.print(F("Warming"));
@@ -134,7 +133,7 @@ void setup()
 void loop()
 {
   unsigned long time_now = millis();
-  while(millis() - time_now <= 30000)
+  while(millis() - time_now <= 60000)
   {
     showReadings();
     buttonPressCheck();
@@ -186,8 +185,8 @@ void showReadings(void)
 
 
 void buttonPressCheck(void)
-{/*
-  if( (digitalRead(BUTTON_THRESH_DOWN) == LOW) && (digitalRead(BUTTON_THRESH_UP) == LOW) ) {
+{
+  if((digitalRead(BUTTON_THRESH_DOWN)==LOW) && (digitalRead(BUTTON_THRESH_UP)==LOW)){
     lcd.clear();
     lcd.home();
     lcd.print(F("Threshold: "));
@@ -226,72 +225,50 @@ void buttonPressCheck(void)
     delay(1000);
     lcd.clear();
   }
-  */
 }
-
 
 bool getGPSdata(void)
 {
-  lcd.clear();
-  unsigned long time_now = millis();
   gps_uart.listen();
+  lcd.clear();
+  //unsigned long time_now = millis();
   lcd.home();
   lcd.print(F("Waiting for"));
   lcd.setCursor(0, 1);
   lcd.print(F("GPS signal... "));
-  delay(1000);
-  while((gps_uart.available() > 0) || (millis() - time_now <= 30000) ) {
+  while(gps_uart.available() > 0) {
+    
     if(gps.encode(gps_uart.read())) {
       if(gps.location.isValid()) {
         lattitude = gps.location.lat();
         longitude = gps.location.lng();
-        lcd.clear();
-        lcd.home();
-        lcd.print(F("GPS"));
-        lcd.setCursor(0, 1);
-        lcd.print(F("updated."));
-        delay(1000);
-        lcd.clear();
-        lcd.home();
-        lcd.print(F("Lat:"));
-        lcd.print(lattitude);
-        lcd.setCursor(0,1);
-        lcd.print(F("Lng:"));
-        lcd.print(longitude);
-        delay(1000);
-        lcd.clear();
-        if(gps.charsProcessed() < 10){
-          lcd.clear();
-          lcd.home();
-          lcd.print(F("GPS not"));
-          lcd.setCursor(0, 1);
-          lcd.print(F("available."));
-          delay(1000);
-          lcd.clear();
-          break;
         }
-        return true;
       }
-    }
-    /*
-    else if(gps.charsProcessed() < 10){
-    }
-    */
   }
   lcd.clear();
   lcd.home();
-  lcd.print(F("GPS search"));
-  lcd.setCursor(0, 1);
-  lcd.print(F("timeout."));
+  lcd.print(F("Lat:"));
+  lcd.print(lattitude);
+  lcd.setCursor(0,1);
+  lcd.print(F("Lng:"));
+  lcd.print(longitude);
   delay(1000);
   lcd.clear();
 }
 
 void alert(void)
 {
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("Alert process"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("running..."));
+  delay(1000);
+  /*
   digitalWrite(BUZZER,HIGH);
   digitalWrite(LED_RED_ALARM,HIGH);
   digitalWrite(LED_GREEN_OKAY,LOW);
+  */
   sendSMS();
 }
 
@@ -307,17 +284,37 @@ void beep(unsigned int duration_in_milliseconds)
 int sendSMS()
 {
   gsm_uart.listen();
-  String Outgoing = "WARNING! lat,lng: " + lattitude + ',' + longitude;
+  String Outgoing = "ALERT! Gas Lead at Lat,Lng: " + lattitude + ',' + longitude;
   char *text = Outgoing.c_str();  //Convert C++ string to C char array
+  
   gsm_uart.sendSms(telephone_precious, text);
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("SMS sent to"));
+  lcd.setCursor(0, 1);
+  lcd.print(telephone_precious);
+  delay(500);
+  
   gsm_uart.sendSms(telephone_lecturer, text);
   lcd.clear();
   lcd.home();
-  lcd.print(F("SMS sent"));
+  lcd.print(F("SMS sent to"));
+  lcd.setCursor(0, 1);
+  lcd.print(telephone_lecturer);
+  delay(500);
+  
+  gsm_uart.sendSms("+2348142357637", text);
+  lcd.clear();
+  lcd.home();
+  lcd.print(F("SMS sent to"));
+  lcd.setCursor(0, 1);
+  lcd.print("+2348142357637");
+  delay(500);
+  
+  lcd.clear();
+  lcd.home();
+  lcd.print(F(" All SMS sent."));
 }
-
-
-
 
 /****************** MQResistanceCalculation ****************************************
 Input:   raw_adc - raw value read from adc, which represents the voltage
