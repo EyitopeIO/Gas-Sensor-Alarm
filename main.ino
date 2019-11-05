@@ -58,11 +58,15 @@ static const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep thresh
 static const int VERIFY_SAVED_PARA = 256;
 
 String Incoming = "";   //hold incoming serial data
-String longitude = "0.0000";
-String lattitude = "0.0000";
+
+//Location of communication lab, central engineering workshop
+volatile double longitude = 7.302806;  
+volatile double lattitude = 5.133139;
+
 
 char *telephone_precious = "+2348034344308";
 char *telephone_lecturer = "+2348060981990";
+static unsigned char text[160];
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
@@ -71,6 +75,9 @@ int BUTTON_THRESH_UP = 11;
 int BUTTON_THRESH_DOWN = 12;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
+
+volatile static uint32_t LPG_level;
+volatile static uint32_t CH4_level;
 
 static unsigned int THRESHOLD;
 
@@ -83,7 +90,7 @@ void one_time_burn(void);
 void showReadings(void);
 
 static const int gps_RXPin = 8, gps_TXPin = 7;
-static const int gsm_RXPin = 10, gsm_TXPin = 9;
+static const int gsm_RXPin = 9, gsm_TXPin = 10;
 static const uint32_t BAUD_DEFAULT = 9600;
 
 Sim800L gsm_uart(gsm_RXPin, gsm_TXPin);   //Rx, Tx
@@ -137,7 +144,9 @@ void loop()
   {
     showReadings();
     buttonPressCheck();
-    if ( (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG) > THRESHOLD) || (MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4) > THRESHOLD) )
+    LPG_level = MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG);
+    CH4_level = MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4);
+    if ( (LPG_level > THRESHOLD) || (CH4_level > THRESHOLD) )
     {
       alert();
     }
@@ -248,11 +257,11 @@ bool getGPSdata(void)
   lcd.clear();
   lcd.home();
   lcd.print(F("Lat:"));
-  lcd.print(lattitude);
+  lcd.print(lattitude, 4);
   lcd.setCursor(0,1);
   lcd.print(F("Lng:"));
-  lcd.print(longitude);
-  delay(1000);
+  lcd.print(longitude, 4);
+  delay(2000);
   lcd.clear();
 }
 
@@ -283,37 +292,67 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
-  gsm_uart.listen();
-  String Outgoing = "ALERT! Gas Lead at Lat,Lng: " + lattitude + ',' + longitude;
-  char *text = Outgoing.c_str();  //Convert C++ string to C char array
+  gsm_uart.listen(); 
+  sprintf(text, "Gas alert! Conc. CH4,LPG: %u,%u ppm; Lat,Lng: %.2lf, %.2lf",CH4_level,LPG_level,lattitude,longitude);
+  //char *text = Outgoing.c_str();  //Convert C++ string to C char array
   
-  gsm_uart.sendSms(telephone_precious, text);
-  lcd.clear();
-  lcd.home();
-  lcd.print(F("SMS sent to"));
-  lcd.setCursor(0, 1);
-  lcd.print(telephone_precious);
-  delay(500);
+  if(gsm_uart.sendSms(telephone_precious, text)){
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS failed to"));
+    lcd.setCursor(0, 1);
+    lcd.print(telephone_precious);
+    delay(500);
+  }
+  else {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS sent to"));
+    lcd.setCursor(0, 1);
+    lcd.print(telephone_precious);
+    delay(1000);
+  }
+  /*
+  if(gsm_uart.sendSms(telephone_lecturer, text)){
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS failed to"));
+    lcd.setCursor(0, 1);
+    lcd.print(telephone_lecturer);
+    delay(500);
+  }
+  else {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS sent to"));
+    lcd.setCursor(0, 1);
+    lcd.print(telephone_lecturer);
+    delay(500);
+  }
+  */
   
-  gsm_uart.sendSms(telephone_lecturer, text);
-  lcd.clear();
-  lcd.home();
-  lcd.print(F("SMS sent to"));
-  lcd.setCursor(0, 1);
-  lcd.print(telephone_lecturer);
-  delay(500);
-  
-  gsm_uart.sendSms("+2348142357637", text);
-  lcd.clear();
-  lcd.home();
-  lcd.print(F("SMS sent to"));
-  lcd.setCursor(0, 1);
-  lcd.print("+2348142357637");
-  delay(500);
+  if(gsm_uart.sendSms("+2348142357637", text)){
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS failed to"));
+    lcd.setCursor(0, 1);
+    lcd.print("+2348142357637");
+    delay(1000);
+  }
+  else {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("SMS sent to"));
+    lcd.setCursor(0, 1);
+    lcd.print("+2348142357637");
+    delay(1000); 
+  }
   
   lcd.clear();
   lcd.home();
   lcd.print(F(" All SMS sent."));
+  delay(2000);
+  lcd.clear();
 }
 
 /****************** MQResistanceCalculation ****************************************
