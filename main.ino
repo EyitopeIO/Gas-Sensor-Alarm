@@ -1,4 +1,4 @@
-//#include <Wire.h>   
+#include <Wire.h>   
 #include <EEPROM.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>  
@@ -54,8 +54,8 @@ float           Ro           =  10;                 //Ro is initialized to 10 ki
 /******************************************************************************************************************************* */
 
 
-const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
-const int VERIFY_SAVED_PARA = 256;
+static const int MEMORY_ADDRESS_THRESHOLD = 0;   //eeprom address to keep threshold value
+static const int VERIFY_SAVED_PARA = 256;
 
 String Incoming = "";   //hold incoming serial data
 String longitude = "0.0000";
@@ -66,13 +66,13 @@ char *telephone_lecturer = "+2348060981990";
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
-int LED_GREEN_OKAY = 6;  //originally pin 6 
+int LED_GREEN_OKAY = 6; 
 int BUTTON_THRESH_UP = 11; 
 int BUTTON_THRESH_DOWN = 12;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
 
-unsigned int THRESHOLD;
+static unsigned int THRESHOLD;
 
 int sendSMS(void);
 void beep(unsigned int duration);
@@ -113,7 +113,7 @@ void setup()
 
   Serial.begin(BAUD_DEFAULT);
   gps_uart.begin(BAUD_DEFAULT);
-  gsm_uart.begin(2400);
+  gsm_uart.begin(BAUD_DEFAULT);
   lcd.clear();
   lcd.setCursor(0,0);   //same as lcd.home( )
   lcd.print(F("Warming"));
@@ -142,7 +142,7 @@ void loop()
       alert();
     }
   }
-  getGPSdata(); //loop holds here for 30s
+  getGPSdata(); //Skips right away if no GPS data available
 }
 
 
@@ -242,8 +242,8 @@ bool getGPSdata(void)
       if(gps.location.isValid()) {
         lattitude = gps.location.lat();
         longitude = gps.location.lng();
-        }
       }
+    }
   }
   lcd.clear();
   lcd.home();
@@ -263,7 +263,7 @@ void alert(void)
   lcd.print(F("Alert process"));
   lcd.setCursor(0, 1);
   lcd.print(F("running..."));
-  delay(1000);
+  delay(500);
   /*
   digitalWrite(BUZZER,HIGH);
   digitalWrite(LED_RED_ALARM,HIGH);
