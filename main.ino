@@ -23,8 +23,8 @@ Note:    This piece of source code is supposed to be used as a demostration ONLY
 
 /************************Hardware Related Macros************************************/
 #define         MQ_PIN                       (7)     //define which analog input channel you are going to use
-#define         RL_VALUE                     (10) //define the load resistance on the board, in kilo ohms
-//#define         RL_VALUE                     (20) //define the load resistance on the board, in kilo ohms
+//#define         RL_VALUE                     (10) //define the load resistance on the board, in kilo ohms
+#define         RL_VALUE                     (20) //define the load resistance on the board, in kilo ohms
 #define         RO_CLEAN_AIR_FACTOR          (10)    //RO_CLEAR_AIR_FACTOR=(Sensor resistance in clean air)/RO,
                                                      //which is derived from the chart in datasheet
 
@@ -60,13 +60,15 @@ static const int VERIFY_SAVED_PARA = 256;
 String Incoming = "";   //hold incoming serial data
 
 //Location of communication lab, central engineering workshop
-volatile double longitude = 7.302806;  
-volatile double lattitude = 5.133139;
+float longitude_d = 7.302806;  
+float lattitude_d = 5.133139;
+float longitude = 0.000000;
+float lattitude = 0.000000;
 
 
 char *telephone_precious = "+2348034344308";
 char *telephone_lecturer = "+2348060981990";
-static unsigned char text[160];
+static char text[160];
 
 int BUZZER = 4;   
 int LED_RED_ALARM = 5; 
@@ -76,10 +78,10 @@ int BUTTON_THRESH_DOWN = 12;
 int threshold_upper;   //stored threshold in memory
 int threshold_lower;
 
-volatile static uint32_t LPG_level;
-volatile static uint32_t CH4_level;
+volatile static int LPG_level;   //highest still 65535
+volatile static int CH4_level;
 
-static unsigned int THRESHOLD;
+static int THRESHOLD;
 
 int sendSMS(void);
 void beep(unsigned int duration);
@@ -88,10 +90,12 @@ bool getGPSdata(void);
 void alert(void);
 void one_time_burn(void);
 void showReadings(void);
+char *ftoa(char *a, double f, int precision);
+static void smartDelay(unsigned long ms);
 
 static const int gps_RXPin = 8, gps_TXPin = 7;
 static const int gsm_RXPin = 9, gsm_TXPin = 10;
-static const uint32_t BAUD_DEFAULT = 9600;
+static const int BAUD_DEFAULT = 9600;
 
 Sim800L gsm_uart(gsm_RXPin, gsm_TXPin);   //Rx, Tx
 SoftwareSerial gps_uart(gps_RXPin, gps_TXPin);    
@@ -139,15 +143,17 @@ void setup()
 
 void loop()
 {
+  Serial.print("Lat,long"); Serial.print(lattitude); Serial.print(longitude);
+  Serial.print("Lat,long"); Serial.print(lattitude_d); Serial.print(longitude_d);
+  Serial.println();
   unsigned long time_now = millis();
-  while(millis() - time_now <= 60000)
+  while(millis() - time_now <= 15000)
   {
     showReadings();
     buttonPressCheck();
     LPG_level = MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_LPG);
     CH4_level = MQGetGasPercentage(MQRead(MQ_PIN)/Ro,GAS_CH4);
-    if ( (LPG_level > THRESHOLD) || (CH4_level > THRESHOLD) )
-    {
+    if ( (LPG_level > THRESHOLD) || (CH4_level > THRESHOLD) ){
       alert();
     }
   }
@@ -177,17 +183,18 @@ void one_time_burn(void)
 
 void showReadings(void)
 {
+  lcd.clear();
   lcd.home();
   lcd.print(F("LPG: "));
   lcd.setCursor(5, 0); 
-  lcd.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_LPG));
+  lcd.print(LPG_level);
   lcd.setCursor(10, 0); 
   lcd.print(F("ppm"));
 
   lcd.setCursor(0, 1);
   lcd.print(F("CH4: "));
   lcd.setCursor(5, 1); 
-  lcd.print(MQGetGasPercentage(MQRead(MQ_PIN) / Ro, GAS_CH4));
+  lcd.print(CH4_level);
   lcd.setCursor(10, 1);
   lcd.print(F("ppm"));
 }
@@ -240,20 +247,14 @@ bool getGPSdata(void)
 {
   gps_uart.listen();
   lcd.clear();
-  //unsigned long time_now = millis();
+  unsigned long time_now = millis();
   lcd.home();
   lcd.print(F("Waiting for"));
   lcd.setCursor(0, 1);
   lcd.print(F("GPS signal... "));
-  while(gps_uart.available() > 0) {
-    
-    if(gps.encode(gps_uart.read())) {
-      if(gps.location.isValid()) {
-        lattitude = gps.location.lat();
-        longitude = gps.location.lng();
-      }
-    }
-  }
+  smartDelay(1000);
+  lattitude = gps.location.lat();
+  longitude = gps.location.lng();
   lcd.clear();
   lcd.home();
   lcd.print(F("Lat:"));
@@ -261,18 +262,39 @@ bool getGPSdata(void)
   lcd.setCursor(0,1);
   lcd.print(F("Lng:"));
   lcd.print(longitude, 4);
-  delay(2000);
+  delay(1000);
   lcd.clear();
+  /*
+  else {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("Lat:"));
+    lcd.print(lattitude_d, 4);
+    lcd.setCursor(0,1);
+    lcd.print(F("Lng:"));
+    lcd.print(longitude_d, 4);
+    delay(1000);
+    lcd.clear();  
+  }
+  */
+  if((gps.charsProcessed() < 10) && (millis() - time_now > 5000)) {
+    lcd.clear();
+    lcd.home();
+    lcd.print(F("No GPS data"));
+    delay(500);
+    lcd.clear();
+  }
 }
 
 void alert(void)
 {
   lcd.clear();
   lcd.home();
-  lcd.print(F("Alert process"));
+  lcd.print(F("Gas Leak"));
   lcd.setCursor(0, 1);
-  lcd.print(F("running..."));
-  delay(500);
+  lcd.
+  lcd.print(F());
+  delay(2000);
   /*
   digitalWrite(BUZZER,HIGH);
   digitalWrite(LED_RED_ALARM,HIGH);
@@ -292,17 +314,18 @@ void beep(unsigned int duration_in_milliseconds)
 
 int sendSMS()
 {
-  gsm_uart.listen(); 
-  sprintf(text, "Gas alert! Conc. CH4,LPG: %u,%u ppm; Lat,Lng: %.2lf, %.2lf",CH4_level,LPG_level,lattitude,longitude);
-  //char *text = Outgoing.c_str();  //Convert C++ string to C char array
-  
+  char lati[10];
+  char longi[10];
+  gsm_uart.listen();
+  sprintf(text, "Gas alert! Conc. CH4,LPG: %d,%d ppm; Lat,Lng: %s, %s",CH4_level,LPG_level,ftoa(lati,lattitude,4),ftoa(longi,longitude,4));
+ 
   if(gsm_uart.sendSms(telephone_precious, text)){
     lcd.clear();
     lcd.home();
     lcd.print(F("SMS failed to"));
     lcd.setCursor(0, 1);
     lcd.print(telephone_precious);
-    delay(500);
+    delay(1000);
   }
   else {
     lcd.clear();
@@ -312,14 +335,13 @@ int sendSMS()
     lcd.print(telephone_precious);
     delay(1000);
   }
-  /*
   if(gsm_uart.sendSms(telephone_lecturer, text)){
     lcd.clear();
     lcd.home();
     lcd.print(F("SMS failed to"));
     lcd.setCursor(0, 1);
     lcd.print(telephone_lecturer);
-    delay(500);
+    delay(1000);
   }
   else {
     lcd.clear();
@@ -327,11 +349,10 @@ int sendSMS()
     lcd.print(F("SMS sent to"));
     lcd.setCursor(0, 1);
     lcd.print(telephone_lecturer);
-    delay(500);
+    delay(1000);
   }
-  */
-  
-  if(gsm_uart.sendSms("+2348142357637", text)){
+ 
+/*  if(gsm_uart.sendSms("+2348142357637", text)){
     lcd.clear();
     lcd.home();
     lcd.print(F("SMS failed to"));
@@ -347,7 +368,7 @@ int sendSMS()
     lcd.print("+2348142357637");
     delay(1000); 
   }
-  
+*/ 
   lcd.clear();
   lcd.home();
   lcd.print(F(" All SMS sent."));
@@ -355,6 +376,29 @@ int sendSMS()
   lcd.clear();
 }
 
+char *ftoa(char *a, double f, int precision){
+  long p[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
+  char *ret = a;
+  long heiltal = (long)f;
+  itoa(heiltal,a,10);
+  while(*a != '\0') a++;
+  *a++ = '.';
+  long desimal = abs((long)((f-heiltal) * p[precision]));
+  itoa(desimal,a,10);
+  return ret;
+}
+
+  // This custom version of delay() ensures that the gps object
+// is being "fed".
+static void smartDelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do 
+  {
+    while (gps_uart.available())
+      gps.encode(gps_uart.read());
+  } while (millis() - start < ms);
+}
 /****************** MQResistanceCalculation ****************************************
 Input:   raw_adc - raw value read from adc, which represents the voltage
 Output:  the calculated sensor resistance
